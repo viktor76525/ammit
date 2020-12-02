@@ -1,7 +1,7 @@
 # distribution name
-SYSTEM_NAME="Ammit"
+SYSTEM_NAME="AMMIT"
 # boot device containing main image, path
-BOOT_LABEL="Hathor"
+BOOT_LABEL="Hesat"
 BOOT_IMG="/images/gentoo.sfs"
 
 # superuser password
@@ -29,3 +29,5 @@ GPU=""
 PERSIST=""
 # label of persistance drive
 PERSIST_LABEL="persistent"
+# blank to ask, options: "YES", "NO"
+COPY2RAM=""

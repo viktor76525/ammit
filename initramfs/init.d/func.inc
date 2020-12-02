@@ -265,19 +265,29 @@ set_swap_fstab() {
 }
 
 finish_mounts() {
-    # mount os
-    mount -t squashfs /mnt/ram/gentoo.sfs /mnt/sfs
+    # mount system
+    mpoints="boot sfs rw"
+    if [ "$COPY2RAM" == "NO" ]; then
+        mount -t squashfs /mnt/boot$BOOT_IMG /mnt/sfs
+    else
+        umount /mnt/boot
+	proc_good "Boot Device Safe to Remove"
+        mount -t squashfs /mnt/ram/gentoo.sfs /mnt/sfs
+	mpoints="$mpoints ram"
+    fi
+
+    # construct overlayfs
     mount -t tmpfs -o size=100% rootRW /mnt/rw
     mkdir -p /mnt/rw/ofs_delta
     mkdir -p /mnt/rw/ofs_work
     mount -t overlay -o lowerdir=/mnt/sfs,upperdir=/mnt/rw/ofs_delta,workdir=/mnt/rw/ofs_work rootOFS $NEW_ROOT
+
     # rearrange
-    for mpoint in "boot" "ram" "sfs" "rw"; do
+    for mpoint in $mpoints; do
         mkdir -p "$NEW_ROOT/mnt/$mpoint"
-        mount --move /mnt/$mpoint $NEW_ROOT/mnt/$mpoint
+        mount --move /mnt/$mpoint ${NEW_ROOT}/mnt/$mpoint
     done
-    umount /mnt/boot
-    proc_good "USB Free to Remove"
+    proc_good "System Ready for Configuration"
 }
 
 poweroff_gpu() {
@@ -453,13 +463,31 @@ open_device() {
     mkdir /mnt/ram
     mkdir /mnt/sfs
     mkdir /mnt/rw
-    mount -o rw $BOOT_PARTITION /mnt/boot
+    mount -o ro $BOOT_PARTITION /mnt/boot
     if [ -e /mnt/boot$BOOT_IMG ]; then
         proc_good "$plabel"
     else
         proc_bad "$plabel"
         choose_keymap
         exec_shell
+    fi
+}
+
+ask_copy2ram() {
+    if [ -z "$COPY2RAM" ]; then
+        COPY2RAM=$(ask "Copy system to RAM? [y|1 / N|0]")
+    fi
+
+    if [ "$COPY2RAM" == "y" ] || [ "$COPY2RAM" == "Y" ] || [ "$COPY2RAM" == "YES" ] || [ "$COPY2RAM" == "1" ]; then
+        COPY2RAM="YES"
+        good_msg "System will be copied to RAM"
+    elif [ "$COPY2RAM" == "" ] || [ "$COPY2RAM" == "n" ] || [ "$COPY2RAM" == "N" ] || [ "$COPY2RAM" == "NO" ] || [ "$COPY2RAM" == "0" ]; then
+        COPY2RAM="NO"
+        good_msg "Not copying system to RAM"
+    else
+        bad_msg "Invalid Choice: Enter an option or nothing for the default."
+        unset COPY2RAM
+        ask_copy2ram
     fi
 }
 
@@ -521,6 +549,10 @@ set_persistent() {
 }
 
 start_copy_system() {
+    if [ "$COPY2RAM" == "NO" ]; then
+        return
+    fi
+
     plabel="Starting Copy to RAM"
     proc_start "$plabel"
     mount -t ramfs rootRO /mnt/ram
@@ -532,6 +564,10 @@ start_copy_system() {
 }
 
 wait_copy_system() {
+    if [ "$COPY2RAM" == "NO" ]; then
+        return
+    fi
+
     plabel="Waiting for Copy to RAM"
     while [ $(stat -c %s /mnt/ram/gentoo.sfs) -lt $(stat -c %s /mnt/boot$BOOT_IMG) ]; do
         diff=$(( $(stat -c %s /mnt/ram/gentoo.sfs) * 100 / $(stat -c %s /mnt/boot$BOOT_IMG) ))
