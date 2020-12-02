@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+# Copyright 2020 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+name="user account updater"
+description="saves changes to user accounts to persistent storage"
+command=/sbin/ammit-user.sh
+command_background=true
+pidfile=/var/run/ammit-user.pid
+
+depend() {
+    after localmount
+}

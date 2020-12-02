@@ -1,0 +1,81 @@
+#!/bin/busybox bb
+
+
+### SETUP ENV ###
+#################
+
+source /init.d/vars.inc
+source /init.d/func.inc
+source /init.d/setup.inc
+# mount virtual file systems
+virtual_fs "mount"
+machine_config
+
+# large console font
+auto_larger_font
+# fbcondecor terminal
+fancy_terminal
+# prevent kernel messages while running initramfs tasks
+kernel_messages 0
+clear
+print_title
+
+
+### SETUP SYS ###
+#################
+
+# find boot and load system device
+find_device
+open_device
+
+# copy os
+start_copy_system
+
+### FREE TIME START ###
+
+choose_keymap
+ask_gpu_select
+set_zram_swap
+ask_persistent
+
+### FREE TIME END ###
+
+# wait for copy
+wait_copy_system
+
+# mount os and rearrange
+finish_mounts
+
+
+### LATE SETUP ###
+##################
+
+set_persistent
+adduser2
+# user exists below this point
+set_swap_fstab
+set_keymap
+set_gpu_select
+set_larger_font
+set_modules
+etc_setup
+
+# persistance setup
+#if [ "$persistent" == "y" ]; then
+#    source ${PERSIST}/setup.inc
+#fi
+
+# debug shell
+read -t 1 -n 1 -p "press any key to enter shell..." && setsid cttyhack bb
+
+
+### SYSTEM READY ###
+####################
+
+# turn on kernel messages
+kernel_messages 1
+# remove virtual file systems
+virtual_fs "unmount"
+# hand over control
+clear
+exec switch_root $NEW_ROOT /sbin/init

@@ -1,0 +1,9 @@
+#!/bin/bash
+
+depend() {
+    need localmount
+    before xdm
+}
+
+eselect opencl set nvidia
+eselect opengl set nvidia

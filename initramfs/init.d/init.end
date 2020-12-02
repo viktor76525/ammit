@@ -1,0 +1,9 @@
+#!/bin/busybox bb
+
+alias halt="halt -f"
+alias poweroff="poweroff -f"
+alias shutdown="poweroff"
+
+setsid cttyhack bb
+
+shutdown

@@ -1,0 +1,43 @@
+{
+    "panes": {
+        "quadrants": [
+            "Source",
+            "TabSet2",
+            "Console",
+            "TabSet1"
+        ],
+        "tabSet1": [
+            "Environment",
+            "History",
+            "Connections",
+            "Build",
+            "VCS",
+            "Tutorial",
+            "Presentation"
+        ],
+        "tabSet2": [
+            "Files",
+            "Plots",
+            "Packages",
+            "Help",
+            "Viewer"
+        ],
+        "console_left_on_top": false,
+        "console_right_on_top": true
+    },
+    "num_spaces_for_tab": 4,
+    "show_invisibles": true,
+    "show_indent_guides": true,
+    "insert_matching": false,
+    "auto_append_newline": true,
+    "scroll_past_end_of_document": true,
+    "editor_theme": "Vibrant Ink",
+    "default_project_location": "~",
+    "restore_source_documents": false,
+    "wrap_tab_navigation": false,
+    "global_theme": "alternate",
+    "reuse_sessions_for_project_links": true,
+    "posix_terminal_shell": "zsh",
+    "jobs_tab_visibility": "shown",
+    "auto_detect_indentation": false
+}

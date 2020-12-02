@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+# Copyright 2020 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+name="hostsfile downloader"
+description="downloads and installs a block list to /etc/hosts"
+command=/sbin/ammit-hosts.sh
+command_background=true
+pidfile=/var/run/ammit-hosts.pid
+
+depend() {
+    after net
+}
