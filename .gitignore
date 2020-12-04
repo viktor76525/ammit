@@ -1,3 +1,5 @@
-initramfs/home/.gitconfig
-initramfs/home/.ssh/*
+*/.gitconfig
+*/.ssh
+*/ssh
 initramfs/init.d/machines/*/
+initramfs/init.d/users/*/

@@ -831,7 +831,7 @@ function grmlcomp () {
     if is42 ; then
         [[ -r ~/.ssh/config ]] && _ssh_config_hosts=(${${(s: :)${(ps:\t:)${${(@M)${(f)"$(<$HOME/.ssh/config)"}:#Host *}#Host }}}:#*[*?]*}) || _ssh_config_hosts=()
         [[ -r ~/.ssh/known_hosts ]] && _ssh_hosts=(${${${${(f)"$(<$HOME/.ssh/known_hosts)"}:#[\|]*}%%\ *}%%,*}) || _ssh_hosts=()
-        [[ -r /etc/hosts.orig ]] && : ${(A)_etc_hosts:=${(s: :)${(ps:\t:)${${(f)~~"$(</etc/hosts.orig)"}%%\#*}##[:blank:]#[^[:blank:]]#}}} || _etc_hosts=()
+        [[ -r /etc/hosts.orig ]] && : ${(A)_etc_hosts:=${(s: :)${(ps:\t:)${${(f)~~"$(</etc/hosts.backup)"}%%\#*}##[:blank:]#[^[:blank:]]#}}} || _etc_hosts=()
     else
         _ssh_config_hosts=()
         _ssh_hosts=()
@@ -3791,6 +3791,14 @@ if (( GRMLSMALL_SPECIFIC > 0 )) && isgrmlsmall ; then
         compdef _dig dig
     fi
 fi
+
+# python virtualenv support
+source /usr/bin/virtualenvwrapper.sh
+function virtual_env_prompt () {
+    REPLY=${VIRTUAL_ENV+(${VIRTUAL_ENV:t}) }
+}
+grml_theme_add_token virtual-env -f virtual_env_prompt '%F{magenta}' '%f'
+zstyle ':prompt:grml:left:setup' items rc change-root user at host path virtual-env vcs newline percent
 
 zrclocal
 

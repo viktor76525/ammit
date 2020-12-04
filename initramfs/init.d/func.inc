@@ -58,7 +58,10 @@ adduser2() {
     if [ ! -d "${NEW_ROOT}${STD_HOME}" ]; then
         mkdir -p "${NEW_ROOT}${STD_HOME}"
         cp -rT "${NEW_ROOT}/etc/skel" "${NEW_ROOT}${STD_HOME}"
-        cp -a /home/. "${NEW_ROOT}${STD_HOME}/"
+        cp -a /home2/. "${NEW_ROOT}${STD_HOME}/"
+	if [ -d "/init.d/users/${STD_USER}" ]; then
+	    cp -a "/init.d/users/${STD_USER}/." "${NEW_ROOT}${STD_HOME}/"
+	fi
         chown -R $STD_UID:$STD_GID "${NEW_ROOT}${STD_HOME}"
     fi
 
@@ -621,5 +624,10 @@ EOF
     sed -i 's/^#X11Forwarding no$/X11Forwarding yes/' "$NEW_ROOT/etc/ssh/sshd_config"
     if [ ! -z "$MACHINE" ] && [ -d "${MACHINE}/etc/ssh" ]; then
         cp "${MACHINE}/etc/ssh/"* "$NEW_ROOT/etc/ssh/"
+    fi
+
+    # GMT manual install does not install PATH
+    if [ -d "$NEW_ROOT/opt/gmt/bin" ]; then
+        echo "PATH=/opt/gmt/bin" > "$NEW_ROOT/etc/env.d/99gmt"
     fi
 }
