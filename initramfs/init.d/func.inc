@@ -348,6 +348,64 @@ poweroff_gpu() {
 	
 }
 
+ask_timezone() {
+    if [ -z "$TIMEZONE" ]; then
+        ls /usr/share/zoneinfo
+        TIMEZONE=$(ask "Enter timezone (Enter for NZ)")
+    fi
+
+    if [ -z "$TIMEZONE" ]; then
+        TIMEZONE="NZ"
+        good_msg "Using timezone NZ"
+	return
+    fi
+
+    while [ -d /usr/share/zoneinfo/$TIMEZONE ]; do
+        ls /usr/share/zoneinfo/$TIMEZONE
+	TIMEZONE=$TIMEZONE/$(ask "Enter timezone")
+    done
+
+    if [ ! -f /usr/share/zoneinfo/$TIMEZONE ]; then
+        bad_msg "Invalid Choice: ''${TIMEZONE}''"
+	unset TIMEZONE
+    	ask_timezone
+    else
+        good_msg "Using timezone $TIMEZONE"
+    fi
+}
+
+set_timezone() {
+    if [ -f "$NEW_ROOT/etc/localtime" ]; then
+        rm "$NEW_ROOT/etc/localtime"
+    fi
+    echo "$TIMEZONE" > "$NEW_ROOT/etc/timezone"
+    ln -s "/usr/share/zoneinfo/$TIMEZONE" "$NEW_ROOT/etc/localtime"
+}
+
+ask_localtime() {
+    if [ -z "$LOCALTIME" ]; then
+        LOCALTIME=$(ask "System Clock in Local Time? [y/N]")
+    fi
+
+    if [ "$LOCALTIME" == "" ] || [ "$LOCALTIME" == "n" ] || [ "$LOCALTIME" == "N" ] || [ "$LOCALTIME" == "NO" ]; then
+        LOCALTIME="NO"
+        good_msg "System clock in UTC"
+    elif [ "$LOCALTIME" == "y" ] || [ "$LOCALTIME" == "Y" ] || [ "$LOCALTIME" == "YES" ]; then
+        LOCALTIME="YES"
+        good_msg "System clock in local time"
+    else
+        bad_msg "Invalid Choice: Enter an option or nothing for the default."
+        unset LOCALTIME
+        ask_localtime
+    fi
+}
+
+set_localtime() {
+    if [ "$LOCALTIME" == "YES" ]; then
+        sed -i "s/^clock=\".*\"$/clock=\"local\"/" "$NEW_ROOT/etc/conf.d/hwclock"
+    fi
+}
+
 ask_gpu_select() {
     if [ -z "$GPU" ]; then
         GPU=$(ask "Graphics Selection (Free/Nvidia/Poweroff)? [F/n/p]")
@@ -629,5 +687,6 @@ EOF
     # GMT manual install does not install PATH
     if [ -d "$NEW_ROOT/opt/gmt/bin" ]; then
         echo "PATH=/opt/gmt/bin" > "$NEW_ROOT/etc/env.d/99gmt"
+	sed -i "/^PATH=/s/$/:\/opt\/gmt\/bin/" "$NEW_ROOT/etc/environment.d/10-gentoo-env.conf"
     fi
 }

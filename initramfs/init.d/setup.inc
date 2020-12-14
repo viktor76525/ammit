@@ -31,3 +31,7 @@ PERSIST=""
 PERSIST_LABEL="persistent"
 # blank to ask, options: "YES", "NO"
 COPY2RAM=""
+# blank to ask, timezone spec eg: "NZ", "US/Pacific"
+TIMEZONE=""
+# blank to ask, "YES": system clock is in localtime (Windows default), "NO": system clock in UTC
+LOCALTIME=""

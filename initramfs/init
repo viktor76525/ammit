@@ -35,6 +35,8 @@ choose_keymap
 ask_gpu_select
 set_zram_swap
 ask_persistent
+ask_timezone
+ask_localtime
 ### FREE TIME END ###
 
 # wait for copy
@@ -54,6 +56,8 @@ set_keymap
 set_gpu_select
 set_larger_font
 set_modules
+set_timezone
+set_localtime
 etc_setup
 # debug shell
 read -t 1 -n 1 -p "press any key to enter shell..." && setsid cttyhack bb
