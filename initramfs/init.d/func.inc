@@ -263,8 +263,22 @@ set_zram_swap() {
     fi
 }
 
-set_swap_fstab() {
+set_fstab() {
     echo "/dev/zram0 none swap sw 0 0" >> "$NEW_ROOT/etc/fstab"
+    for l in $FSTAB; do
+    	mp=$NEW_ROOT$(echo -e "$l" | cut -d$'\t' -f2)
+	if [ ! -d "$mp" ]; then
+	    mkdir -p "$mp"
+	fi
+        echo -e "$l" >> "$NEW_ROOT/etc/fstab"
+    done
+    for s in $SYMLINKS; do
+        src=$(echo -e "$s" | cut -d$'\t' -f1)
+	dst=$(echo -e "$s" | cut -d$'\t' -f2)
+	parent=$(dirname "$dst")
+	mkdir -p "$NEW_ROOT$parent"
+	ln -sf "$src" "$NEW_ROOT$dst"
+    done
 }
 
 finish_mounts() {
@@ -570,22 +584,38 @@ ask_persistent() {
     fi
 }
 
+
 set_persistent() {
     if [ "$PERSIST" == "NO" ]; then
-    	return
+        return
     fi
     plabel="Setting up Persistent Storage"
     proc_start "$plabel"
-    # assume device is ready at this point
-    PERSIST_PART=$(findfs LABEL=$PERSIST_LABEL)
+
+    # find persistent partition
+    TRIES=50
+    if [ $(echo ${PERSIST_LABEL:0:4}) == "lvm:" ]; then
+        LVM_VG=$(echo $PERSIST_LABEL | cut -d: -f2)
+        LVM_LV=$(echo $PERSIST_LABEL | cut -d: -f3)
+        while [ $TRIES -gt 0 ] && sleep 0.1 && ! lvm.static vgchange -a y $LVM_VG &>/dev/null; do
+            TRIES=$(($TRIES-1))
+	done
+        lvm.static vgscan --mknodes &>/dev/null
+        PERSIST_PART="/dev/$LVM_VG/$LVM_LV"
+    else
+        # wait for device to show up
+        while [ $TRIES -gt 0 ] && sleep 0.1 && ! PERSIST_PART=$(findfs LABEL=$PERSIST_LABEL); do
+            TRIES=$(($TRIES-1))
+        done
+    fi
     if [ ! -e "$PERSIST_PART" ]; then
         if [ "$PERSIST" == "REQUIRE" ]; then
-	    bad_msg "Persistant Storage Device Required, Not Found"
-	    exec_shell
-	fi
+            bad_msg "Persistant Storage Device Required, Not Found"
+            exec_shell
+        fi
         proc_bad "$plabel" "Persistant Storage Not Found"
-	PERSIST="NO"
-	return
+        PERSIST="NO"
+        return
     fi
 
     # mount read-only to load configurations into system
@@ -593,7 +623,7 @@ set_persistent() {
     mount -o ro $PERSIST_PART /mnt/ptmp
     for usr in group passwd shadow; do
         if [ -f "/mnt/ptmp/.etc/$usr" ]; then
-	    # TODO: only update accounts where uid==0 or uid >= 1000
+            # TODO: only update accounts where uid==0 or uid >= 1000
             cp "/mnt/ptmp/.etc/$usr" "$NEW_ROOT/etc/$usr"
         fi
     done
@@ -601,13 +631,19 @@ set_persistent() {
     rm -rf /mnt/ptmp
 
     # add device into fstab and install update configuration services
-    echo "LABEL=$PERSIST_LABEL /home ext4 noatime 0 2" >> "$NEW_ROOT/etc/fstab"
+    if [ -z $LVM_LV ]; then
+        echo "LABEL=$PERSIST_LABEL /home ext4 noatime 0 2" >> "$NEW_ROOT/etc/fstab"
+    else
+        echo "$PERSIST_PART /home ext4 noatime 0 2" >> "$NEW_ROOT/etc/fstab"
+        enable_service lvm
+    fi
 
     # service to store account information to persistent storage
     enable_service ammit-user
 
     proc_good "$plabel"
 }
+
 
 start_copy_system() {
     if [ "$COPY2RAM" == "NO" ]; then
@@ -641,7 +677,16 @@ wait_copy_system() {
 }
 
 enable_service() {
-    ln -s "/etc/init.d/$1" "$NEW_ROOT/etc/runlevels/default/$1"
+    ln -sf "/etc/init.d/$1" "$NEW_ROOT/etc/runlevels/default/$1"
+}
+
+add_path() {
+    if [ -f "$NEW_ROOT/etc/env.d/99ammit" ]; then
+    	sed -i "\%^PATH=%s%$%:$1%" "$NEW_ROOT/etc/env.d/99ammit"
+    else
+        echo "PATH=$1" > "$NEW_ROOT/etc/env.d/99ammit"
+    fi
+    sed -i "/^export PATH='/s%'$%:$1'%" "$NEW_ROOT/etc/profile.env"
 }
 
 etc_setup() {
@@ -655,10 +700,14 @@ etc_setup() {
     # uncomment line or server not available
     sed -i 's/^#www-port=80$/www-port=80/' "$NEW_ROOT/etc/conf.d/rstudio-server.conf"
     for s in $SERVICES; do
+        if [ "${s:0:4}" == "net." ]; then
+	    # create network service
+	    ln -sf net.lo "$NEW_ROOT/etc/init.d/$s"
+	fi
         enable_service $s
     done
 
-    sed -i "s/^DISPLAYMANAGER=\".*\"$/DISPLAYMANAGER=\"sddm\"/" "$NEW_ROOT/etc/conf.d/xdm"
+    sed -i "s/^DISPLAYMANAGER=\".*\"$/DISPLAYMANAGER=\"sddm\"/" "$NEW_ROOT/etc/conf.d/display-manager"
     cat << EOF > "$NEW_ROOT/etc/sddm.conf"
 [Autologin]
 Relogin=false
@@ -680,13 +729,15 @@ EOF
 
     # allow X11 forwarding by default, also optional machine specific ssh keys
     sed -i 's/^#X11Forwarding no$/X11Forwarding yes/' "$NEW_ROOT/etc/ssh/sshd_config"
-    if [ ! -z "$MACHINE" ] && [ -d "${MACHINE}/etc/ssh" ]; then
-        cp "${MACHINE}/etc/ssh/"* "$NEW_ROOT/etc/ssh/"
+    if [ ! -z "$MACHINE" ] && [ -d "${MACHINE}/etc" ]; then
+        cp -a "${MACHINE}/etc/." "$NEW_ROOT/etc"
     fi
 
     # GMT manual install does not install PATH
     if [ -d "$NEW_ROOT/opt/gmt/bin" ]; then
-        echo "PATH=/opt/gmt/bin" > "$NEW_ROOT/etc/env.d/99gmt"
-	sed -i "/^PATH=/s/$/:\/opt\/gmt\/bin/" "$NEW_ROOT/etc/environment.d/10-gentoo-env.conf"
+	add_path "/opt/gmt/bin"
     fi
+
+    # rstudio service on boot bugfix
+    echo -e "\ndepend() {\n    need net\n}" >> "$NEW_ROOT/etc/init.d/rstudio-server"
 }

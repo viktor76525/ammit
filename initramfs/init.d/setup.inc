@@ -20,14 +20,14 @@ STD_GROUPS="users wheel video scanner plugdev uucp vboxusers rstudio-server"
 # system setup
 HOSTNAME="phoenix"
 # services enabled by default (xdm for gui login)
-SERVICES="xdm NetworkManager sshd rstudio-server ammit-hosts"
+SERVICES="display-manager NetworkManager sshd rstudio-server ammit-hosts"
 # blank to ask, examples: "us", "dvorak"
 KEYMAP=""
 # blank to ask, options: "FREE" (opensource) | "NVIDIA" (proprietary) | "KILL" (poweroff, for dual graphics)
 GPU=""
 # blank to ask, options: "YES" (setup if available), "REQUIRE" (fail if not found), will not ask if partition not available
 PERSIST=""
-# label of persistance drive
+# label of persistance drive or if lvm: "lvm:vg_name:lv_name"
 PERSIST_LABEL="persistent"
 # blank to ask, options: "YES", "NO"
 COPY2RAM=""
@@ -35,3 +35,7 @@ COPY2RAM=""
 TIMEZONE=""
 # blank to ask, "YES": system clock is in localtime (Windows default), "NO": system clock in UTC
 LOCALTIME=""
+# extra mounts, use escape sequences (\t) to separate columns
+FSTAB=""
+# symlink pairs separated by space, tab (\t) within pairs
+SYMLINKS=""
