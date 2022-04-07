@@ -116,7 +116,13 @@ virtual_fs() {
         mount -t devtmpfs none /dev
         mount -t proc none /proc
         mount -t sysfs none /sys
+	if ! mountpoint -q /sys/firmware/efi/efivars; then
+            mount -t efivarfs none /sys/firmware/efi/efivars &>/dev/null
+        fi
     else
+        if mountpoint -q /sys/firmware/efi/efivars; then
+	    umount /sys/firmware/efi/efivars
+	fi
         umount /dev /proc /sys
     fi
 }
@@ -146,12 +152,6 @@ set_larger_font() {
     sed -i "s/^consolefont=\".*\"$/consolefont=\"ter-v${FONT_SIZE}b\"/" "$NEW_ROOT/etc/conf.d/consolefont"
 }
 
-fancy_terminal() {
-    fbcondecor_ctl.static -c setcfg -t phoenix
-    fbcondecor_ctl.static -c setpic -t phoenix
-    fbcondecor_ctl.static -c on
-}
-
 load_cmdline() {
     touch /tmp/cmdline
     for i in $(cat /proc/cmdline); do
@@ -164,6 +164,7 @@ load_cmdline() {
 
 choose_keymap() {
     if [ -z "$KEYMAP" ]; then
+        echo
         cat /lib/keymaps/list
         KEYMAP=$(ask "Load Keymap (Enter for Default)")
         case ${KEYMAP} in
@@ -255,7 +256,7 @@ set_zram_swap() {
     plabel="Creating ZRAM SWAP"
     proc_start "$plabel"
     echo "lz4" > /sys/block/zram0/comp_algorithm
-    echo $(( $(cat /proc/meminfo | grep MemTotal | awk '{ print $2 }') + 4))K > /sys/block/zram0/disksize
+    echo $(cat /proc/meminfo | grep MemTotal | awk '{ print $2 }')K > /sys/block/zram0/disksize
     if mkswap -L zswap /dev/zram0 >/dev/null; then
         proc_good "$plabel"
     else
@@ -283,18 +284,23 @@ set_fstab() {
 
 finish_mounts() {
     # mount system
-    mpoints="boot sfs rw"
     if [ "$COPY2RAM" == "NO" ]; then
         mount -t squashfs /mnt/boot$BOOT_IMG /mnt/sfs
+	mpoints="boot sfs rw"
     else
         umount /mnt/boot
 	proc_good "Boot Device Safe to Remove"
         mount -t squashfs /mnt/ram/gentoo.sfs /mnt/sfs
-	mpoints="$mpoints ram"
+	mpoints="sfs rw ram"
     fi
 
+    # rw layer tmpfs can compete and evenually moved to zram or start with zram
+    # mount -t tmpfs -o size=100% rootRW /mnt/rw
+    echo "lz4" > /sys/block/zram1/comp_algorithm
+    echo $(cat /proc/meminfo | grep MemTotal | awk '{ print $2 }')K > /sys/block/zram1/disksize
+    mke2fs -L rootRW -m 1 /dev/zram1 >/dev/null
+    mount -o discard /dev/zram1 /mnt/rw
     # construct overlayfs
-    mount -t tmpfs -o size=100% rootRW /mnt/rw
     mkdir -p /mnt/rw/ofs_delta
     mkdir -p /mnt/rw/ofs_work
     mount -t overlay -o lowerdir=/mnt/sfs,upperdir=/mnt/rw/ofs_delta,workdir=/mnt/rw/ofs_work rootOFS $NEW_ROOT
@@ -304,6 +310,11 @@ finish_mounts() {
         mkdir -p "$NEW_ROOT/mnt/$mpoint"
         mount --move /mnt/$mpoint ${NEW_ROOT}/mnt/$mpoint
     done
+    # efi boot partition
+    if [ ! -z "$PARTUUID" ]; then
+        echo -e "PARTUUID=$PARTUUID\t/boot\tvfat\tnoauto,user\t0 0" >> "$NEW_ROOT/etc/fstab"
+    fi
+
     proc_good "System Ready for Configuration"
 }
 
@@ -445,29 +456,22 @@ set_gpu_select() {
     if [ "$GPU" == "FREE" ]; then
         # replace nvidia setup with blacklist
         echo "blacklist nvidia" > "$NEW_ROOT/etc/modprobe.d/nvidia.conf"
-        # also part of nvidia drivers
-        if [ -e "$NEW_ROOT/etc/modprobe.d/nvidia-rmmod.conf" ]; then
-            rm "$NEW_ROOT/etc/modprobe.d/nvidia-rmmod.conf"
-        fi
 
     elif [ "$GPU" == "KILL" ]; then
         # sleep hook will power down GPU on every resume
-        cp "/etc/gpu_kill" "$NEW_ROOT/etc/pm/sleep.d/50_gpu_kill"
-        chmod +x "$NEW_ROOT/etc/pm/sleep.d/50_gpu_kill"
+        #cp "/etc/gpu_kill" "$NEW_ROOT/etc/pm/sleep.d/50_gpu_kill"
+        #chmod +x "$NEW_ROOT/etc/pm/sleep.d/50_gpu_kill"
         # poweroff discreet graphics
         poweroff_gpu
+        # also part of nvidia drivers
+        if [ -e "$NEW_ROOT/etc/modprobe.d/nvidia.conf" ]; then
+            rm "$NEW_ROOT/etc/modprobe.d/nvidia.conf"
+        fi
 
     elif [ "$GPU" == "NVIDIA" ]; then
         # blacklist free drivers
         echo "blacklist nouveau" > "$NEW_ROOT/etc/modprobe.d/nouveau-noauto.conf"
-
-        # CHECK IF REQUIRED STILL
-        # add hybrid nvidia xsetup commands
-        #cat "$NEW_ROOT/usr/share/config/kdm/Xsetup-nvidia" >> "$NEW_ROOT/usr/share/config/kdm/Xsetup"
-        # use hybrid nvidia xorg.conf
-        #cp "$NEW_ROOT/etc/X11/xorg-nvidia.conf" "$NEW_ROOT/etc/X11/xorg.conf"
-
-        # eselect nvidia
+        # eselect nvidia (outdated?)
         cp "/etc2/local.d/nvidia.start" "$NEW_ROOT/etc/local.d/nvidia.start"
 
     fi
@@ -479,20 +483,20 @@ set_modules() {
         echo 'modules=""' >> "$NEW_ROOT/etc/conf.d/modules"
     fi
 
-	# 80ee:beef = vboxvideo
-	# 80ee:cafe = vboxservice
-    add_module "vboxdrv vboxnetadp vboxnetflt"
-	proc_start "Testing if VirtualBox Guest"
-	if busybox lspci | grep -q ': 80ee:'; then
-		add_module "vboxguest"
-		add_module "vboxsf"
+    # 80ee:beef = vboxvideo
+    # 80ee:cafe = vboxservice
+    #add_module "vboxdrv vboxnetadp vboxnetflt"
+    proc_start "Testing if VirtualBox Guest"
+    if busybox lspci | grep -q ': 80ee:'; then
+        add_module "vboxguest"
+        add_module "vboxsf"
         add_module "vboxvideo"
-# TODO! must set service to start
-# TODO? add shortcut to share locations
+        # TODO! must set service to start
+        # TODO? add shortcut to share locations
         proc_good "Testing if VirtualBox Guest" "guest drivers set to load"
-	else
-		proc_good "Testing if VirtualBox Guest (false)"
-	fi
+    else
+        proc_good "Testing if VirtualBox Guest (false)"
+    fi
 
 	# 14e4: = broadcom
 	proc_start "Testing for Broadcom WiFi"
@@ -515,6 +519,10 @@ set_modules() {
 }
 
 find_device() {
+    if [ -z "$BOOT_LABEL" ]; then
+        ask_device
+        return
+    fi
     plabel="Waiting for Boot Device"
     proc_start "$plabel"
     TRIES=50
@@ -525,14 +533,40 @@ find_device() {
         proc_good "$plabel"
     else
         proc_bad "$plabel"
-        choose_keymap
-        exec_shell
+        ask_device
     fi
-    BOOT_DEVICE=$(echo $BOOT_PARTITION | awk -F[0-9] '$0=$1')
+}
+
+ask_device() {
+    n=0
+    echo
+    for dev in $(cat /proc/partitions | tail -n +3 | awk '{ print $4 }'); do
+        details=$(blkid /dev/$dev | cut -c6-)
+	if [ ! -z "$details" ]; then
+	    echo $details
+	    n=$(($n + 1))
+	fi
+    done
+    echo
+    echo "$n partitions found (press enter to refresh, shell to exit to shell)"
+    echo
+
+    BOOT_PARTITION=$(ask "System Partition")
+    if [ "$BOOT_PARTITION" == "" ]; then
+        ask_device
+    elif [ "$BOOT_PARTITION" == "shell" ]; then
+        exec_shell
+    elif [ -b "/dev/$BOOT_PARTITION" ]; then
+       BOOT_PARTITION="/dev/$BOOT_PARTITION"
+       good_msg "System Partition $BOOT_PARTITION" 
+    else
+        bad_msg "Invalid Choice: ''/dev/${BOOT_PARTITION}''"
+	ask_device
+    fi
 }
 
 open_device() {
-    plabel="Accessing device"
+    plabel="Accessing Device"
     proc_start "$plabel"
     mkdir /mnt/boot
     mkdir /mnt/ram
@@ -548,15 +582,86 @@ open_device() {
     fi
 }
 
-ask_copy2ram() {
-    if [ -z "$COPY2RAM" ]; then
-        COPY2RAM=$(ask "Copy system to RAM? [y|1 / N|0]")
+find_efi() {
+    plabel="EFI Info"
+    proc_start "$plabel"
+
+    vars="/sys/firmware/efi/efivars"
+    guid="8be4df61-93ca-11d2-aa0d-00e098032b8c"
+    if [ ! -f $vars/BootCurrent-$guid ]; then
+        proc_bad "$plabel" "efivars not found"
+	return
+    fi
+    current=$vars/Boot$(hexdump -v -e '1/2 "%04x\n"' $vars/BootCurrent-$guid | tail -n 1)-$guid
+    if [ ! -f $current ]; then
+        proc_bad "$plabel" "efivars not found"
+        return
     fi
 
-    if [ "$COPY2RAM" == "y" ] || [ "$COPY2RAM" == "Y" ] || [ "$COPY2RAM" == "YES" ] || [ "$COPY2RAM" == "1" ]; then
+    boot=$(hexdump -v -e '1/2 "%04x\n"' $current | awk '''
+    BEGIN {
+        section=1; subsection=0; skip=0
+        label=""; partuuid=""
+    }
+    # first 2 are info about var, next 2 are EFI_LOAD_OPTION Attributes
+    NR <= 4 { next }
+    NR == 5 { fpllength = int("0x" $1) - 0x0002; next }
+    {
+        if (section == 1) {
+            if ($1 == "0000") {
+                section += 1
+            } else {
+                label = label sprintf("%c", int("0x" $1))
+            }
+        }
+        else if (section == 2) {
+            if (skip > 0) {
+                skip -= 2
+            } else if (subsection == 0) {
+                type = $1
+                if (type == "ff7f") exit
+                subsection += 1
+            } else if (subsection == 1) {
+                if (type != "0104") { skip = int("0x" $1) - 0x004; subsection = 0 }
+                else { subsection += 1; fpllength = int("0x" $1) - 0x002; skip = 20 }
+            } else {
+                len = length( partuuid )
+                if (len == 0) partuuid = $1 "-"
+                else if (len == 5) partuuid = $1 partuuid
+                else if (len <= 14) partuuid = partuuid $1 "-"
+                else if (len == 19) partuuid = partuuid substr($1, 3, 2) substr($1, 1, 2) "-"
+                else if (len <= 32) partuuid = partuuid substr($1, 3, 2) substr($1, 1, 2)
+                else if ($1 != "0202") partuuid = ""
+            }
+            fpllength -= 2
+            if (fpllength == 0 ) exit
+        }
+    }
+    END { print label; print partuuid }
+    ''')
+
+    EFI_LOAD_OPTION_DESC=$(echo -e "$boot" | cut -d$'\n' -f1)
+    PARTUUID=$(echo -e "$boot" | cut -d$'\n' -f2)
+    if [ ! -z "$EFI_LOAD_OPTION_DESC" ]; then
+        if [ ! -z "$PARTUUID" ]; then
+            proc_good "$plabel" "$EFI_LOAD_OPTION_DESC"
+        else
+            proc_good "$plabel (no guid)" "$EFI_LOAD_OPTION_DESC"
+        fi
+    else
+        proc_bad "$plabel" "EFI Description Not Read (non fatal)"
+    fi
+}
+
+ask_copy2ram() {
+    if [ -z "$COPY2RAM" ]; then
+        COPY2RAM=$(ask "Copy system to RAM? [y/N]")
+    fi
+
+    if [ "$COPY2RAM" == "y" ] || [ "$COPY2RAM" == "Y" ] || [ "$COPY2RAM" == "YES" ]; then
         COPY2RAM="YES"
         good_msg "System will be copied to RAM"
-    elif [ "$COPY2RAM" == "" ] || [ "$COPY2RAM" == "n" ] || [ "$COPY2RAM" == "N" ] || [ "$COPY2RAM" == "NO" ] || [ "$COPY2RAM" == "0" ]; then
+    elif [ "$COPY2RAM" == "" ] || [ "$COPY2RAM" == "n" ] || [ "$COPY2RAM" == "N" ] || [ "$COPY2RAM" == "NO" ]; then
         COPY2RAM="NO"
         good_msg "Not copying system to RAM"
     else
@@ -671,7 +776,6 @@ wait_copy_system() {
         proc_update "$plabel ${diff}%"
         sleep 0.25
     done
-    mount -o remount,ro /mnt/ram
     sync; echo 3 > /proc/sys/vm/drop_caches
     proc_good "$plabel"
 }
@@ -697,8 +801,10 @@ etc_setup() {
     cp "/etc2/init.d/"* "$NEW_ROOT/etc/init.d/"
     cp "/sbin2/"* "$NEW_ROOT/sbin/"
 
-    # uncomment line or server not available
-    sed -i 's/^#www-port=80$/www-port=80/' "$NEW_ROOT/etc/conf.d/rstudio-server.conf"
+    # enable rstudio server to start
+    if [ -f "$NEW_ROOT/etc/conf.d/rstudio-server.conf" ]; then
+        sed -i 's/^#www-port=80$/www-port=80/' "$NEW_ROOT/etc/conf.d/rstudio-server.conf"
+    fi
     for s in $SERVICES; do
         if [ "${s:0:4}" == "net." ]; then
 	    # create network service
@@ -737,7 +843,4 @@ EOF
     if [ -d "$NEW_ROOT/opt/gmt/bin" ]; then
 	add_path "/opt/gmt/bin"
     fi
-
-    # rstudio service on boot bugfix
-    echo -e "\ndepend() {\n    need net\n}" >> "$NEW_ROOT/etc/init.d/rstudio-server"
 }

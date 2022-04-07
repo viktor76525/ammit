@@ -13,8 +13,6 @@ machine_config
 
 # large console font
 auto_larger_font
-# fbcondecor terminal
-fancy_terminal
 # prevent kernel messages while running initramfs tasks
 kernel_messages 0
 clear
@@ -24,20 +22,17 @@ print_title
 ### SETUP SYS ###
 #################
 
-# find boot and load system device
+find_efi
+choose_keymap
 find_device
 open_device
 ask_copy2ram
 start_copy_system
-
-### FREE TIME START ###
-choose_keymap
 ask_gpu_select
 set_zram_swap
 ask_persistent
 ask_timezone
 ask_localtime
-### FREE TIME END ###
 
 # wait for copy
 wait_copy_system

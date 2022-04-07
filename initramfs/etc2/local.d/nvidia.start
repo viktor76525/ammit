@@ -2,7 +2,7 @@
 
 depend() {
     need localmount
-    before xdm
+    before display-manager
 }
 
 eselect opencl set nvidia
