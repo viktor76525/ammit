@@ -2,11 +2,11 @@
 # Copyright 2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-name="user account updater"
-description="saves changes to user accounts to persistent storage"
-command=/sbin/ammit-user.sh
+name="etc subset updater"
+description="saves changes in wanted items under /etc to persistent storage"
+command=/sbin/ammit-etc.sh
 command_background=true
-pidfile=/var/run/ammit-user.pid
+pidfile=/var/run/ammit-etc.pid
 
 depend() {
     after localmount

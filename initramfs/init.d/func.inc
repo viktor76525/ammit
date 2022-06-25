@@ -78,37 +78,44 @@ adduser2() {
     done
 }
 
-machine_config() {
-    proc_start "Loading Machine Configuration"
+find_machine_config() {
+    plabel="Loading Machine Configuration"
+    proc_start "$plabel"
     prefix="/init.d/machines/"
     # motherboard UUID
-    a=$prefix$(cat /sys/class/dmi/id/product_uuid)/setup.inc
+    a=$prefix$(cat /sys/class/dmi/id/product_uuid 2>/dev/null)/setup.inc
     if [ -f "$a" ]; then
-        source "$a"
 	MACHINE=$prefix$(cat /sys/class/dmi/id/product_uuid)
-        proc_good "Found UUID Configuration"
+        proc_good "$plabel" "Found UUID Configuration"
         return
     fi
     # motherboard Serial
-    a=$(cat /sys/class/dmi/id/*_serial)
+    a=$(cat "/sys/class/dmi/id/"*_serial 2>/dev/null)
     for i in $a; do
-        if [ -f "$prefix$a/setup.inc" ]; then
-            source "$prefix$a/setup.inc"
-	    MACHINE="$prefix$a"
-            proc_good "Found Device Serial Configuration"
+        if [ -f "$prefix$i/setup.inc" ]; then
+	    MACHINE="$prefix$i"
+            proc_good "$plabel" "Found Serial Configuration"
             return
         fi
     done
-    # mac address based id requires built in network driver
-    a=$(cat /sys/class/net/*/address )
+    # mac address based id requires kernel built in network driver
+    a=$(cat "/sys/class/net/"*"/address" 2>/dev/null)
     for i in $a; do
-        if [ -f "$prefix$a/setup.inc" ]; then
-            source "$prefix$a/setup.inc"
-	    MACHINE="$prefix$a"
-            proc_good "Found MAC Address Configuration"
+        if [ -f "$prefix$i/setup.inc" ]; then
+	    MACHINE="$prefix$i"
+            proc_good "$plabel" "Found MAC Address Configuration"
             return
         fi
     done
+    proc_good "$plabel" "None available"
+}
+
+machine_config() {
+    find_machine_config
+
+    if [ ! -z "$MACHINE" ]; then
+        read -t 1 -n 1 -p "press any key to cancel machine config..." && unset MACHINE || source "$MACHINE/setup.inc"
+    fi
 }
 
 virtual_fs() {
@@ -267,18 +274,21 @@ set_zram_swap() {
 set_fstab() {
     echo "/dev/zram0 none swap sw 0 0" >> "$NEW_ROOT/etc/fstab"
     for l in $FSTAB; do
-    	mp=$NEW_ROOT$(echo -e "$l" | cut -d$'\t' -f2)
-	if [ ! -d "$mp" ]; then
-	    mkdir -p "$mp"
-	fi
+        mp=$NEW_ROOT$(echo -e "$l" | cut -d$'\t' -f2)
+        if [ ! -d "$mp" ]; then
+            mkdir -p "$mp"
+        fi
         echo -e "$l" >> "$NEW_ROOT/etc/fstab"
     done
     for s in $SYMLINKS; do
         src=$(echo -e "$s" | cut -d$'\t' -f1)
-	dst=$(echo -e "$s" | cut -d$'\t' -f2)
-	parent=$(dirname "$dst")
-	mkdir -p "$NEW_ROOT$parent"
-	ln -sf "$src" "$NEW_ROOT$dst"
+        dst=$(echo -e "$s" | cut -d$'\t' -f2)
+        parent=$(dirname "$dst")
+        mkdir -p "$NEW_ROOT$parent"
+        if [ -e "$NEW_ROOT$dst" ]; then
+            mv "$NEW_ROOT$dst" "$NEW_ROOT${dst}_presymlink"
+        fi
+        ln -sf "$src" "$NEW_ROOT$dst"
     done
 }
 
@@ -726,12 +736,9 @@ set_persistent() {
     # mount read-only to load configurations into system
     mkdir /mnt/ptmp
     mount -o ro $PERSIST_PART /mnt/ptmp
-    for usr in group passwd shadow; do
-        if [ -f "/mnt/ptmp/.etc/$usr" ]; then
-            # TODO: only update accounts where uid==0 or uid >= 1000
-            cp "/mnt/ptmp/.etc/$usr" "$NEW_ROOT/etc/$usr"
-        fi
-    done
+    if [ -d "/mnt/ptmp/.etc" ]; then
+        cp -a "/mnt/ptmp/.etc/." "$NEW_ROOT/etc"
+    fi
     umount /mnt/ptmp
     rm -rf /mnt/ptmp
 
@@ -744,7 +751,7 @@ set_persistent() {
     fi
 
     # service to store account information to persistent storage
-    enable_service ammit-user
+    enable_service ammit-etc
 
     proc_good "$plabel"
 }

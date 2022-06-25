@@ -1,5 +1,7 @@
 */.gitconfig
 */.ssh
 */ssh
+autobuilds/*
+distfiles/*
 initramfs/init.d/machines/*/
 initramfs/init.d/users/*/

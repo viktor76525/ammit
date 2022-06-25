@@ -9,18 +9,18 @@ source /init.d/func.inc
 source /init.d/setup.inc
 # mount virtual file systems
 virtual_fs "mount"
-machine_config
 
 # large console font
 auto_larger_font
 # prevent kernel messages while running initramfs tasks
 kernel_messages 0
 clear
-print_title
 
 
 ### SETUP SYS ###
 #################
+
+machine_config
 
 find_efi
 choose_keymap
