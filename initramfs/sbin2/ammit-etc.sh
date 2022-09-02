@@ -17,12 +17,21 @@ delayed_update() {
 }
 
 watch_target() {
-    while inotifywait -qq -e modify,attrib,create,delete,move_self,delete_self "/etc/$1"; do
+    while inotifywait -qqr -e modify,attrib,create,delete,move_self,delete_self "/etc/$1"; do
         # something changed, update
         delayed_update "$1" &
+	sleep 0.1
     done
+}
+
+nproc() {
+    jobs -p | wc -l
 }
 
 for item in /home/.etc/*; do
     watch_target "$(basename "$item")" &
+done
+
+while [ $(nproc) -gt 1 ]; do
+    sleep 3600
 done

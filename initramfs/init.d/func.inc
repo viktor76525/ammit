@@ -262,7 +262,7 @@ EOF
 set_zram_swap() {
     plabel="Creating ZRAM SWAP"
     proc_start "$plabel"
-    echo "lz4" > /sys/block/zram0/comp_algorithm
+    echo "zstd" > /sys/block/zram0/comp_algorithm
     echo $(cat /proc/meminfo | grep MemTotal | awk '{ print $2 }')K > /sys/block/zram0/disksize
     if mkswap -L zswap /dev/zram0 >/dev/null; then
         proc_good "$plabel"
@@ -306,7 +306,7 @@ finish_mounts() {
 
     # rw layer tmpfs can compete and evenually moved to zram or start with zram
     # mount -t tmpfs -o size=100% rootRW /mnt/rw
-    echo "lz4" > /sys/block/zram1/comp_algorithm
+    echo "zstd" > /sys/block/zram1/comp_algorithm
     echo $(cat /proc/meminfo | grep MemTotal | awk '{ print $2 }')K > /sys/block/zram1/disksize
     mke2fs -L rootRW -m 1 /dev/zram1 >/dev/null
     mount -o discard /dev/zram1 /mnt/rw
@@ -744,7 +744,7 @@ set_persistent() {
 
     # add device into fstab and install update configuration services
     if [ -z $LVM_LV ]; then
-        echo "LABEL=$PERSIST_LABEL /home ext4 noatime 0 2" >> "$NEW_ROOT/etc/fstab"
+        echo "LABEL=$PERSIST_LABEL /home ext4 noatime,errors=remount-ro,discard 0 2" >> "$NEW_ROOT/etc/fstab"
     else
         echo "$PERSIST_PART /home ext4 noatime 0 2" >> "$NEW_ROOT/etc/fstab"
         enable_service lvm
@@ -788,7 +788,13 @@ wait_copy_system() {
 }
 
 enable_service() {
-    ln -sf "/etc/init.d/$1" "$NEW_ROOT/etc/runlevels/default/$1"
+    service=$(echo "$1" | cut -d":" -f2)
+    if [ "$service" == "$1" ]; then
+        runlevel="default"
+    else
+        runlevel=$(echo "$1" | cut -d":" -f1)
+    fi
+    ln -sf "/etc/init.d/$service" "$NEW_ROOT/etc/runlevels/$runlevel/$service"
 }
 
 add_path() {
