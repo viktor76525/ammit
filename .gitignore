@@ -2,6 +2,11 @@
 */.ssh
 */ssh
 autobuilds/*
+build/*
 distfiles/*
+gentoo/*
 initramfs/init.d/machines/*/
 initramfs/init.d/users/*/
+musl/*
+notes.d/*
+pinebookpro/*

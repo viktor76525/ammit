@@ -321,8 +321,8 @@ finish_mounts() {
         mount --move /mnt/$mpoint ${NEW_ROOT}/mnt/$mpoint
     done
     # efi boot partition
-    if [ ! -z "$PARTUUID" ]; then
-        echo -e "PARTUUID=$PARTUUID\t/boot\tvfat\tnoauto,user\t0 0" >> "$NEW_ROOT/etc/fstab"
+    if [ ! -z "$EFI_PARTUUID" ]; then
+        echo -e "PARTUUID=$EFI_PARTUUID\t/boot\tvfat\tnoauto,user\t0 0" >> "$NEW_ROOT/etc/fstab"
     fi
 
     proc_good "System Ready for Configuration"
@@ -529,6 +529,11 @@ set_modules() {
 }
 
 find_device() {
+    if [ "$EFI_MEDIA_TYPE" == "optical" ] && [ -b "$EFI_PCI_DEVICE" ]; then
+        BOOT_PARTITION=$EFI_PCI_DEVICE
+	return
+
+    fi
     if [ -z "$BOOT_LABEL" ]; then
         ask_device
         return
@@ -611,56 +616,96 @@ find_efi() {
     boot=$(hexdump -v -e '1/2 "%04x\n"' $current | awk '''
     BEGIN {
         section=1; subsection=0; skip=0
-        label=""; partuuid=""
+        label=""; partuuid=""; mediatype=""; pcipath=""
     }
     # first 2 are info about var, next 2 are EFI_LOAD_OPTION Attributes
     NR <= 4 { next }
     NR == 5 { fpllength = int("0x" $1) - 0x0002; next }
     {
         if (section == 1) {
+            # reading label
             if ($1 == "0000") {
+                # label null terminated
                 section += 1
             } else {
                 label = label sprintf("%c", int("0x" $1))
             }
         }
         else if (section == 2) {
+            # device path protocol
             if (skip > 0) {
                 skip -= 2
             } else if (subsection == 0) {
+                # file path type
                 type = $1
                 if (type == "ff7f") exit
+                else if (type == "0103") mediatype = "optical"
+                else if (type == "0203") mediatype = "scsi"
+                else if (type == "0503") mediatype = "usb"
+                else if (type == "1203") mediatype = "sata"
+                else if (type == "1703") mediatype = "nvme"
                 subsection += 1
             } else if (subsection == 1) {
-                if (type != "0104") { skip = int("0x" $1) - 0x004; subsection = 0 }
-                else { subsection += 1; fpllength = int("0x" $1) - 0x002; skip = 20 }
-            } else {
+                # length of this file path
+		# hard drive path, skip partition number (4) and lba start(8)/size(8)
+                if (type == "0104") { subsection = 2; skip = 20 }
+		# pci path
+		else if (type == "0101") {subsection = 3 }
+                else { skip = int("0x" $1) - 0x004; subsection = 0 }
+            } else if (subsection == 2) {
+	        # 0401 hard drive path
                 len = length( partuuid )
-                if (len == 0) partuuid = $1 "-"
-                else if (len == 5) partuuid = $1 partuuid
-                else if (len <= 14) partuuid = partuuid $1 "-"
-                else if (len == 19) partuuid = partuuid substr($1, 3, 2) substr($1, 1, 2) "-"
-                else if (len <= 32) partuuid = partuuid substr($1, 3, 2) substr($1, 1, 2)
-                else if ($1 != "0202") partuuid = ""
+                if (len == 0) partuuid = $1 "-" #1
+                else if (len == 5) partuuid = $1 partuuid #2
+                else if (len <= 14) partuuid = partuuid $1 "-" #3,4
+                else if (len == 19) partuuid = partuuid substr($1, 3, 2) substr($1, 1, 2) "-" #5
+                else if (len <= 32) partuuid = partuuid substr($1, 3, 2) substr($1, 1, 2) #6,7,8
+                else if (len == 36) {
+                    # finished reading partuuid, makes sure we have read a guid partition table signature (partuuid)
+                    if ($1 != "0202") partuuid = ""
+                    subsection = 0
+                }
+            } else if (subsection == 3) {
+	        # 0101 pci path
+                pcipath = substr($1, 3, 2)
+                # remove leading 0s in device before prepending function
+                sub(/^0*/, "", pcipath)
+                pcipath = substr($1, 1, 2) "." pcipath
+                subsection = 0
             }
             fpllength -= 2
             if (fpllength == 0 ) exit
         }
     }
-    END { print label; print partuuid }
+    END { print label; print partuuid; print mediatype; print pcipath }
     ''')
 
-    EFI_LOAD_OPTION_DESC=$(echo -e "$boot" | cut -d$'\n' -f1)
-    PARTUUID=$(echo -e "$boot" | cut -d$'\n' -f2)
-    if [ ! -z "$EFI_LOAD_OPTION_DESC" ]; then
-        if [ ! -z "$PARTUUID" ]; then
-            proc_good "$plabel" "$EFI_LOAD_OPTION_DESC"
+    EFI_DESC=$(echo -e "$boot" | cut -d$'\n' -f1)
+    EFI_PARTUUID=$(echo -e "$boot" | cut -d$'\n' -f2)
+    EFI_MEDIA_TYPE=$(echo -e "$boot" | cut -d$'\n' -f3)
+    EFI_PCI_DEVICE=$(efi_pci2dev $(echo -e "$boot" | cut -d$'\n' -f4))
+    if [ ! -z "$EFI_DESC" ]; then
+        if [ ! -z "$EFI_PARTUUID" ]; then
+            proc_good "$plabel" "$EFI_DESC"
         else
-            proc_good "$plabel (no guid)" "$EFI_LOAD_OPTION_DESC"
+            proc_good "$plabel (no guid)" "$EFI_DESC"
         fi
     else
         proc_bad "$plabel" "EFI Description Not Read (non fatal)"
     fi
+}
+
+efi_pci2dev() {
+    for dev in "/sys/block/"*; do
+        dest=$(readlink -f $dev)
+        if [ ${dest:0:16} == "/sys/devices/pci" ]; then
+            id=$(echo $dest | cut -d/ -f5 | cut -d: -f3)
+            if [ "$id" == "$1" ]; then
+                echo /dev/${dev:11}
+		return
+            fi
+        fi
+    done
 }
 
 ask_copy2ram() {
