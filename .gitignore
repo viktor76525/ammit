@@ -10,3 +10,4 @@ initramfs/init.d/users/*/
 musl/*
 notes.d/*
 pinebookpro/*
+releases/*

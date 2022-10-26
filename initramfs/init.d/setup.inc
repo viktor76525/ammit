@@ -1,7 +1,9 @@
 # distribution name
 SYSTEM_NAME="AMMIT"
-# boot device containing main image, path
-BOOT_LABEL="Hesat"
+# boot device LABEL= or UUID= containing main image, path
+BOOT_DEVICE="LABEL=Hesat"
+# mount options for boot device
+BOOT_OPTIONS="ro"
 BOOT_IMG="/images/gentoo.sfs"
 
 # superuser password
@@ -27,8 +29,12 @@ KEYMAP=""
 GPU=""
 # blank to ask, options: "YES" (setup if available), "REQUIRE" (fail if not found), will not ask if partition not available
 PERSIST=""
-# label of persistance drive or if lvm: "lvm:vg_name:lv_name"
-PERSIST_LABEL="persistent"
+# persistance drive LABEL= or UUID= or if lvm: "lvm:vg_name:lv_name"
+PERSIST_DEVICE="LABEL=persistent"
+# file system on persistance drive eg: ext4, btrfs
+PERSIST_FS="ext4"
+# mount options for persistance drive
+PERSIST_OPTIONS="noatime,errors=remount-ro,discard"
 # blank to ask, options: "YES", "NO"
 COPY2RAM=""
 # blank to ask, timezone spec eg: "NZ", "US/Pacific"

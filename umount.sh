@@ -5,7 +5,7 @@ if [ ! -d "$1" ]; then
 	exit
 fi
 
-if [ -e "/dev/disk/by-label/omen-home" ]; then
+if [ -e "/dev/disk/by-label/omen-sys" ]; then
     rm -rf "$1"/var/tmp/*
     umount "$1"/var/tmp
 fi

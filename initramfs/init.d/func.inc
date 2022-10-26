@@ -74,8 +74,12 @@ adduser2() {
     echo "${STD_GROUP}:x:${STD_GID}:" >> "${NEW_ROOT}/etc/group"
     echo "${STD_USER}:${STD_PASSWD}:::::::" >> "${NEW_ROOT}/etc/shadow"
     for g in $STD_GROUPS; do
-        sed -i "/^$g:/ s/$/,$STD_USER/" "${NEW_ROOT}/etc/group"
+        add2group "$g"
     done
+}
+
+add2group() {
+    sed -i "/^$1:/ s/$/,$STD_USER/" "${NEW_ROOT}/etc/group"
 }
 
 find_machine_config() {
@@ -495,15 +499,15 @@ set_modules() {
 
     # 80ee:beef = vboxvideo
     # 80ee:cafe = vboxservice
-    #add_module "vboxdrv vboxnetadp vboxnetflt"
     proc_start "Testing if VirtualBox Guest"
     if busybox lspci | grep -q ': 80ee:'; then
         add_module "vboxguest"
         add_module "vboxsf"
         add_module "vboxvideo"
-        # TODO! must set service to start
-        # TODO? add shortcut to share locations
-        proc_good "Testing if VirtualBox Guest" "guest drivers set to load"
+	enable_service "virtualbox-guest-additions"
+	add2group "vboxguest"
+	add2group "vboxsf"
+        proc_good "Testing if VirtualBox Guest" "guest setup complete"
     else
         proc_good "Testing if VirtualBox Guest (false)"
     fi
@@ -534,14 +538,14 @@ find_device() {
 	return
 
     fi
-    if [ -z "$BOOT_LABEL" ]; then
+    if [ -z "$BOOT_DEVICE" ]; then
         ask_device
         return
     fi
     plabel="Waiting for Boot Device"
     proc_start "$plabel"
     TRIES=50
-    while [ $TRIES -gt 0 ] && sleep 0.2 && ! BOOT_PARTITION=$(findfs LABEL=$BOOT_LABEL); do
+    while [ $TRIES -gt 0 ] && sleep 0.2 && ! BOOT_PARTITION=$(findfs "$BOOT_DEVICE"); do
         TRIES=$(($TRIES-1))
     done
     if [ -e "$BOOT_PARTITION" ]; then
@@ -576,7 +580,7 @@ ask_device() {
        good_msg "System Partition $BOOT_PARTITION" 
     else
         bad_msg "Invalid Choice: ''/dev/${BOOT_PARTITION}''"
-	ask_device
+        ask_device
     fi
 }
 
@@ -587,7 +591,12 @@ open_device() {
     mkdir /mnt/ram
     mkdir /mnt/sfs
     mkdir /mnt/rw
-    mount -o ro $BOOT_PARTITION /mnt/boot
+    mkdir -p /run/cryptsetup
+    if cryptsetup luksDump $BOOT_PARTITION >/dev/null 2>1; then
+        cryptsetup open $BOOT_PARTITION system
+        BOOT_PARTITION=/dev/mapper/system
+    fi
+    mount -o $BOOT_OPTIONS $BOOT_PARTITION /mnt/boot
     if [ -e /mnt/boot$BOOT_IMG ]; then
         proc_good "$plabel"
     else
@@ -754,9 +763,9 @@ set_persistent() {
 
     # find persistent partition
     TRIES=50
-    if [ $(echo ${PERSIST_LABEL:0:4}) == "lvm:" ]; then
-        LVM_VG=$(echo $PERSIST_LABEL | cut -d: -f2)
-        LVM_LV=$(echo $PERSIST_LABEL | cut -d: -f3)
+    if [ $(echo ${PERSIST_DEVICE:0:4}) == "lvm:" ]; then
+        LVM_VG=$(echo $PERSIST_DEVICE | cut -d: -f2)
+        LVM_LV=$(echo $PERSIST_DEVICE | cut -d: -f3)
         while [ $TRIES -gt 0 ] && sleep 0.1 && ! lvm.static vgchange -a y $LVM_VG &>/dev/null; do
             TRIES=$(($TRIES-1))
 	done
@@ -764,7 +773,7 @@ set_persistent() {
         PERSIST_PART="/dev/$LVM_VG/$LVM_LV"
     else
         # wait for device to show up
-        while [ $TRIES -gt 0 ] && sleep 0.1 && ! PERSIST_PART=$(findfs LABEL=$PERSIST_LABEL); do
+        while [ $TRIES -gt 0 ] && sleep 0.1 && ! PERSIST_PART=$(findfs $PERSIST_DEVICE); do
             TRIES=$(($TRIES-1))
         done
     fi
@@ -779,6 +788,11 @@ set_persistent() {
     fi
 
     # mount read-only to load configurations into system
+    mkdir -p /run/cryptsetup
+    if cryptsetup luksDump $PERSIST_PART >/dev/null 2>1; then
+        cryptsetup open $PERSIST_PART home
+        PERSIST_PART=/dev/mapper/home
+    fi
     mkdir /mnt/ptmp
     mount -o ro $PERSIST_PART /mnt/ptmp
     if [ -d "/mnt/ptmp/.etc" ]; then
@@ -788,10 +802,8 @@ set_persistent() {
     rm -rf /mnt/ptmp
 
     # add device into fstab and install update configuration services
-    if [ -z $LVM_LV ]; then
-        echo "LABEL=$PERSIST_LABEL /home ext4 noatime,errors=remount-ro,discard 0 2" >> "$NEW_ROOT/etc/fstab"
-    else
-        echo "$PERSIST_PART /home ext4 noatime 0 2" >> "$NEW_ROOT/etc/fstab"
+    echo "$PERSIST_PART /home $PERSIST_FS $PERSIST_OPTIONS 0 2" >> "$NEW_ROOT/etc/fstab"
+    if [ ! -z $LVM_LV ]; then
         enable_service lvm
     fi
 
