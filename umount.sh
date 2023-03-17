@@ -15,6 +15,9 @@ umount -l "$1"/sys
 umount -l "$1"/dev
 umount -l "$1"/run
 umount "$1"/var/cache/distfiles
+if mountpoint -q "$1"/var/cache/binpkgs; then
+    umount "$1"/var/cache/binpkgs
+fi
 umount "$1"/usr/src/initramfs
 
 if [ -f "$1"/etc/resolv.conf ]; then

@@ -47,11 +47,11 @@ adduser2() {
     # try to check for updates from persistent storage
     created="n"
     if [ "$PERSIST" != "NO" ]; then
-    	info=$(grep "^${STD_USER}:" "$NEW_ROOT/etc/passwd")
-	if [ ! -z "$info" ]; then
-	    created="y"
-	    STD_HOME=$(echo $info | cut -d: -f6)
-	fi
+        info=$(grep "^${STD_USER}:" "$NEW_ROOT/etc/passwd")
+        if [ ! -z "$info" ]; then
+            created="y"
+            STD_HOME=$(echo $info | cut -d: -f6)
+        fi
     fi
 
     # add data if not existing from persistent storage
@@ -59,9 +59,9 @@ adduser2() {
         mkdir -p "${NEW_ROOT}${STD_HOME}"
         cp -rT "${NEW_ROOT}/etc/skel" "${NEW_ROOT}${STD_HOME}"
         cp -a /home2/. "${NEW_ROOT}${STD_HOME}/"
-	if [ -d "/init.d/users/${STD_USER}" ]; then
-	    cp -a "/init.d/users/${STD_USER}/." "${NEW_ROOT}${STD_HOME}/"
-	fi
+        if [ -d "/init.d/users/${STD_USER}" ]; then
+            cp -a "/init.d/users/${STD_USER}/." "${NEW_ROOT}${STD_HOME}/"
+        fi
         chown -R $STD_UID:$STD_GID "${NEW_ROOT}${STD_HOME}"
     fi
 
@@ -89,7 +89,7 @@ find_machine_config() {
     # motherboard UUID
     a=$prefix$(cat /sys/class/dmi/id/product_uuid 2>/dev/null)/setup.inc
     if [ -f "$a" ]; then
-	MACHINE=$prefix$(cat /sys/class/dmi/id/product_uuid)
+        MACHINE=$prefix$(cat /sys/class/dmi/id/product_uuid)
         proc_good "$plabel" "Found UUID Configuration"
         return
     fi
@@ -97,7 +97,7 @@ find_machine_config() {
     a=$(cat "/sys/class/dmi/id/"*_serial 2>/dev/null)
     for i in $a; do
         if [ -f "$prefix$i/setup.inc" ]; then
-	    MACHINE="$prefix$i"
+            MACHINE="$prefix$i"
             proc_good "$plabel" "Found Serial Configuration"
             return
         fi
@@ -106,7 +106,7 @@ find_machine_config() {
     a=$(cat "/sys/class/net/"*"/address" 2>/dev/null)
     for i in $a; do
         if [ -f "$prefix$i/setup.inc" ]; then
-	    MACHINE="$prefix$i"
+            MACHINE="$prefix$i"
             proc_good "$plabel" "Found MAC Address Configuration"
             return
         fi
@@ -127,13 +127,13 @@ virtual_fs() {
         mount -t devtmpfs none /dev
         mount -t proc none /proc
         mount -t sysfs none /sys
-	if ! mountpoint -q /sys/firmware/efi/efivars; then
+        if ! mountpoint -q /sys/firmware/efi/efivars; then
             mount -t efivarfs none /sys/firmware/efi/efivars &>/dev/null
         fi
     else
         if mountpoint -q /sys/firmware/efi/efivars; then
-	    umount /sys/firmware/efi/efivars
-	fi
+            umount /sys/firmware/efi/efivars
+        fi
         umount /dev /proc /sys
     fi
 }
@@ -243,7 +243,7 @@ set_keymap() {
     sed -i "s/^keymap=\".*\"$/keymap=\"$KEYMAP\"/" "$NEW_ROOT/etc/conf.d/keymaps"
     # default user
     if [ "$KEYMAP" != "us" ]; then
-	# display name for KDE tray (first 2 characters)
+        # display name for KDE tray (first 2 characters)
         dname=$( echo ${KEYMAP::2} | tr a-z A-Z )
         cat << EOF > "${NEW_ROOT}${STD_HOME}/.config/kxkbrc"
 [Layout]
@@ -300,12 +300,12 @@ finish_mounts() {
     # mount system
     if [ "$COPY2RAM" == "NO" ]; then
         mount -t squashfs /mnt/boot$BOOT_IMG /mnt/sfs
-	mpoints="boot sfs rw"
+        mpoints="boot sfs rw"
     else
         umount /mnt/boot
-	proc_good "Boot Device Safe to Remove"
+        proc_good "Boot Device Safe to Remove"
         mount -t squashfs /mnt/ram/gentoo.sfs /mnt/sfs
-	mpoints="sfs rw ram"
+        mpoints="sfs rw ram"
     fi
 
     # rw layer tmpfs can compete and evenually moved to zram or start with zram
@@ -333,58 +333,58 @@ finish_mounts() {
 }
 
 poweroff_gpu() {
-	proc_start "Powering off GPU"
+    proc_start "Powering off GPU"
     insmod /lib/modules/acpi_call.ko
-	if lsmod | grep -q acpi_call; then
-		methods="
-		\_SB.PCI0.P0P1.VGA._OFF
-		\_SB.PCI0.P0P2.VGA._OFF
-		\_SB_.PCI0.OVGA.ATPX
-		\_SB_.PCI0.OVGA.XTPX
-		\_SB.PCI0.P0P3.PEGP._OFF
-		\_SB.PCI0.P0P2.PEGP._OFF
-		\_SB.PCI0.P0P1.PEGP._OFF
-		\_SB.PCI0.MXR0.MXM0._OFF
-		\_SB.PCI0.PEG1.GFX0._OFF
-		\_SB.PCI0.PEG0.GFX0.DOFF
-		\_SB.PCI0.PEG1.GFX0.DOFF
-		\_SB.PCI0.PEG0.PEGP._OFF
-		\_SB.PCI0.XVR0.Z01I.DGOF
-		\_SB.PCI0.PEGR.GFX0._OFF
-		\_SB.PCI0.PEG.VID._OFF
-		\_SB.PCI0.PEG0.VID._OFF
-		\_SB.PCI0.P0P2.DGPU._OFF
-		\_SB.PCI0.P0P4.DGPU.DOFF
-		\_SB.PCI0.IXVE.IGPU.DGOF
-		\_SB.PCI0.RP00.VGA._PS3
-		\_SB.PCI0.RP00.VGA.P3MO
-		\_SB.PCI0.GFX0.DSM._T_0
-		\_SB.PCI0.LPC.EC.PUBS._OFF
-		\_SB.PCI0.P0P2.NVID._OFF
-		\_SB.PCI0.P0P2.VGA.PX02
-		\_SB_.PCI0.PEGP.DGFX._OFF
-		\_SB_.PCI0.VGA.PX02
-		\_SB.PCI0.PEG0.PEGP.SGOF
-		\_SB.PCI0.AGP.VGA.PX02
-		"
-		
-		for m in $methods; do
-			echo $m > /proc/acpi/call
-			result=$(cat /proc/acpi/call)
-			case "$result" in
-				Error*)
-					;;
-				*)
-				proc_good "Powering off GPU ($m)"
-				# break # try other methods too
-				;;
-			esac
-		done
-	
-	else
-		proc_bad "Powering off GPU" "(no kernel module)"
-	fi
-	
+    if lsmod | grep -q acpi_call; then
+        methods="
+        \_SB.PCI0.P0P1.VGA._OFF
+        \_SB.PCI0.P0P2.VGA._OFF
+        \_SB_.PCI0.OVGA.ATPX
+        \_SB_.PCI0.OVGA.XTPX
+        \_SB.PCI0.P0P3.PEGP._OFF
+        \_SB.PCI0.P0P2.PEGP._OFF
+        \_SB.PCI0.P0P1.PEGP._OFF
+        \_SB.PCI0.MXR0.MXM0._OFF
+        \_SB.PCI0.PEG1.GFX0._OFF
+        \_SB.PCI0.PEG0.GFX0.DOFF
+        \_SB.PCI0.PEG1.GFX0.DOFF
+        \_SB.PCI0.PEG0.PEGP._OFF
+        \_SB.PCI0.XVR0.Z01I.DGOF
+        \_SB.PCI0.PEGR.GFX0._OFF
+        \_SB.PCI0.PEG.VID._OFF
+        \_SB.PCI0.PEG0.VID._OFF
+        \_SB.PCI0.P0P2.DGPU._OFF
+        \_SB.PCI0.P0P4.DGPU.DOFF
+        \_SB.PCI0.IXVE.IGPU.DGOF
+        \_SB.PCI0.RP00.VGA._PS3
+        \_SB.PCI0.RP00.VGA.P3MO
+        \_SB.PCI0.GFX0.DSM._T_0
+        \_SB.PCI0.LPC.EC.PUBS._OFF
+        \_SB.PCI0.P0P2.NVID._OFF
+        \_SB.PCI0.P0P2.VGA.PX02
+        \_SB_.PCI0.PEGP.DGFX._OFF
+        \_SB_.PCI0.VGA.PX02
+        \_SB.PCI0.PEG0.PEGP.SGOF
+        \_SB.PCI0.AGP.VGA.PX02
+        "
+
+        for m in $methods; do
+            echo $m > /proc/acpi/call
+            result=$(cat /proc/acpi/call)
+            case "$result" in
+                Error*)
+                    ;;
+                *)
+                proc_good "Powering off GPU ($m)"
+                # break # try other methods too
+                ;;
+            esac
+        done
+
+    else
+        proc_bad "Powering off GPU" "(no kernel module)"
+    fi
+
 }
 
 ask_timezone() {
@@ -396,18 +396,18 @@ ask_timezone() {
     if [ -z "$TIMEZONE" ]; then
         TIMEZONE="NZ"
         good_msg "Using timezone NZ"
-	return
+        return
     fi
 
     while [ -d /usr/share/zoneinfo/$TIMEZONE ]; do
         ls /usr/share/zoneinfo/$TIMEZONE
-	TIMEZONE=$TIMEZONE/$(ask "Enter timezone")
+        TIMEZONE=$TIMEZONE/$(ask "Enter timezone")
     done
 
     if [ ! -f /usr/share/zoneinfo/$TIMEZONE ]; then
         bad_msg "Invalid Choice: ''${TIMEZONE}''"
-	unset TIMEZONE
-    	ask_timezone
+        unset TIMEZONE
+        ask_timezone
     else
         good_msg "Using timezone $TIMEZONE"
     fi
@@ -504,38 +504,39 @@ set_modules() {
         add_module "vboxguest"
         add_module "vboxsf"
         add_module "vboxvideo"
-	enable_service "virtualbox-guest-additions"
-	add2group "vboxguest"
-	add2group "vboxsf"
+        enable_service "virtualbox-guest-additions"
+        add2group "vboxguest"
+        add2group "vboxsf"
         proc_good "Testing if VirtualBox Guest" "guest setup complete"
     else
         proc_good "Testing if VirtualBox Guest (false)"
     fi
 
-	# 14e4: = broadcom
-	proc_start "Testing for Broadcom WiFi"
-	for i in $(busybox lspci | grep -o '14e4:....'); do
-		if cat /lib/modules/broadcom.list | grep -q $i; then
-			# blacklist conflicting modules
-			echo blacklist b43 > "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
-			echo blacklist bcma >> "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
-			echo blacklist ssb >> "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
-			echo blacklist mac80211 >> "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
+    # 14e4: = broadcom
+    proc_start "Testing for Broadcom WiFi"
+    for i in $(busybox lspci | grep -o '14e4:....'); do
+        if cat /lib/modules/broadcom.list | grep -q $i; then
+            # blacklist conflicting modules
+            echo blacklist b43 > "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
+            echo blacklist bcma >> "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
+            echo blacklist ssb >> "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
+            echo blacklist mac80211 >> "$NEW_ROOT/etc/modprobe.d/bcm-blacklist.conf"
 
-			rm "$NEW_ROOT/etc/modprobe.d/wl-noauto.conf"
-			proc_good "Using Broadcom WiFi Driver"
-			break
-		fi
-	done
-	if $processing; then
-		proc_good "Not Using Broadcom Driver"
-	fi
+            rm "$NEW_ROOT/etc/modprobe.d/wl-noauto.conf"
+            proc_good "Using Broadcom WiFi Driver"
+            break
+        fi
+    done
+    if $processing; then
+        proc_good "Not Using Broadcom Driver"
+    fi
 }
 
 find_device() {
-    if [ "$EFI_MEDIA_TYPE" == "optical" ] && [ -b "$EFI_PCI_DEVICE" ]; then
-        BOOT_PARTITION=$EFI_PCI_DEVICE
-	return
+    if [ $(echo $EFI_DEVICE* | wc -w) -eq 1 ] && [ -b "$EFI_DEVICE" ]; then
+        # seems we are booting from an optical media
+        BOOT_PARTITION=$EFI_DEVICE
+        return
 
     fi
     if [ -z "$BOOT_DEVICE" ]; then
@@ -561,10 +562,10 @@ ask_device() {
     echo
     for dev in $(cat /proc/partitions | tail -n +3 | awk '{ print $4 }'); do
         details=$(blkid /dev/$dev | cut -c6-)
-	if [ ! -z "$details" ]; then
-	    echo $details
-	    n=$(($n + 1))
-	fi
+        if [ ! -z "$details" ]; then
+            echo $details
+            n=$(($n + 1))
+        fi
     done
     echo
     echo "$n partitions found (press enter to refresh, shell to exit to shell)"
@@ -614,7 +615,7 @@ find_efi() {
     guid="8be4df61-93ca-11d2-aa0d-00e098032b8c"
     if [ ! -f $vars/BootCurrent-$guid ]; then
         proc_bad "$plabel" "efivars not found"
-	return
+        return
     fi
     current=$vars/Boot$(hexdump -v -e '1/2 "%04x\n"' $vars/BootCurrent-$guid | tail -n 1)-$guid
     if [ ! -f $current ]; then
@@ -625,20 +626,16 @@ find_efi() {
     boot=$(hexdump -v -e '1/2 "%04x\n"' $current | awk '''
     BEGIN {
         section=1; subsection=0; skip=0
-        label=""; partuuid=""; mediatype=""; pcipath=""
+        label=""; partuuid=""; mediatype=""; pcipath=""; satapath=""
     }
     # first 2 are info about var, next 2 are EFI_LOAD_OPTION Attributes
     NR <= 4 { next }
     NR == 5 { fpllength = int("0x" $1) - 0x0002; next }
     {
         if (section == 1) {
-            # reading label
-            if ($1 == "0000") {
-                # label null terminated
-                section += 1
-            } else {
-                label = label sprintf("%c", int("0x" $1))
-            }
+            # reading null terminated label
+            if ($1 == "0000") section += 1
+            else label = label sprintf("%c", int("0x" $1))
         }
         else if (section == 2) {
             # device path protocol
@@ -648,21 +645,25 @@ find_efi() {
                 # file path type
                 type = $1
                 if (type == "ff7f") exit
-                else if (type == "0103") mediatype = "optical"
+                else if (type == "0103") mediatype = "atapi"
                 else if (type == "0203") mediatype = "scsi"
+                # port numbers are not reliable
                 else if (type == "0503") mediatype = "usb"
                 else if (type == "1203") mediatype = "sata"
                 else if (type == "1703") mediatype = "nvme"
                 subsection += 1
             } else if (subsection == 1) {
                 # length of this file path
-		# hard drive path, skip partition number (4) and lba start(8)/size(8)
+                len = int("0x" $1) - 4
+                # hard drive path, skip partition number (4) and lba start(8)/size(8)
                 if (type == "0104") { subsection = 2; skip = 20 }
-		# pci path
-		else if (type == "0101") {subsection = 3 }
-                else { skip = int("0x" $1) - 0x004; subsection = 0 }
+                # pci path
+                else if (type == "0101") subsection = 3
+                # sata path
+                else if (type == "1203") subsection = 4
+                else { skip = len; subsection = 0 }
             } else if (subsection == 2) {
-	        # 0401 hard drive path
+                # 0401 hard drive path
                 len = length( partuuid )
                 if (len == 0) partuuid = $1 "-" #1
                 else if (len == 5) partuuid = $1 partuuid #2
@@ -675,46 +676,65 @@ find_efi() {
                     subsection = 0
                 }
             } else if (subsection == 3) {
-	        # 0101 pci path
+                # 0101 pci path: function (1) + device (1)
                 pcipath = substr($1, 3, 2)
-                # remove leading 0s in device before prepending function
-                sub(/^0*/, "", pcipath)
+                # remove leading 0 in device before prepending function
+                sub(/^0?/, "", pcipath)
                 pcipath = substr($1, 1, 2) "." pcipath
                 subsection = 0
+            } else if (subsection == 4) {
+                # 0312 sata path: port (2), multiplier (2), multiplier port (2)
+                # multipliers not tested
+                if (len == 6) satapath = int("0x" $1)
+                else if (len == 4) {
+                    if ($1 == "ffff") { satapath = satapath ":0:0"; skip = 2; subsection = 0 }
+                    else satapath = satapath ":" int("0x" $1) ":"
+                } else { satapath = satapath int("0x" $1); subsection = 0 }
+                len -= 2
             }
             fpllength -= 2
             if (fpllength == 0 ) exit
         }
     }
-    END { print label; print partuuid; print mediatype; print pcipath }
+    END { print label; print partuuid; print mediatype; print pcipath; print satapath }
     ''')
 
     EFI_DESC=$(echo -e "$boot" | cut -d$'\n' -f1)
     EFI_PARTUUID=$(echo -e "$boot" | cut -d$'\n' -f2)
     EFI_MEDIA_TYPE=$(echo -e "$boot" | cut -d$'\n' -f3)
-    EFI_PCI_DEVICE=$(efi_pci2dev $(echo -e "$boot" | cut -d$'\n' -f4))
+    EFI_PCI_PATH=$(echo -e "$boot" | cut -d$'\n' -f4)
+    EFI_SATA_PATH=$(echo -e "$boot" | cut -d$'\n' -f5)
+    EFI_DEVICE=$(efi2dev "$EFI_PCI_PATH" "$EFI_SATA_PATH")
     if [ ! -z "$EFI_DESC" ]; then
-        if [ ! -z "$EFI_PARTUUID" ]; then
-            proc_good "$plabel" "$EFI_DESC"
-        else
-            proc_good "$plabel (no guid)" "$EFI_DESC"
-        fi
+        proc_good "$plabel" "\"$EFI_DESC\" ($EFI_MEDIA_TYPE) $EFI_DEVICE"
     else
         proc_bad "$plabel" "EFI Description Not Read (non fatal)"
     fi
 }
 
-efi_pci2dev() {
+efi2dev() {
+    best_match=""
     for dev in "/sys/block/"*; do
         dest=$(readlink -f $dev)
+        # not sure about sata/usb without pci
         if [ ${dest:0:16} == "/sys/devices/pci" ]; then
-            id=$(echo $dest | cut -d/ -f5 | cut -d: -f3)
-            if [ "$id" == "$1" ]; then
-                echo /dev/${dev:11}
-		return
+            pci_id=$(echo $dest | cut -d/ -f5 | cut -d: -f3)
+            sata_target=$(echo $dest | cut -d/ -f8)
+            if [ "$pci_id" == "$1" ]; then
+                if [ ! -z "$2" ] && [ "${sata_target:6}" == "$2" ]; then
+                    echo /dev/${dev:11}
+                    return
+                else
+                    if [ -z "$best_match" ]; then
+                        best_match=/dev/${dev:11}
+                    else
+                        return
+                    fi
+                fi
             fi
         fi
     done
+    echo "$best_match"
 }
 
 ask_copy2ram() {
@@ -768,7 +788,7 @@ set_persistent() {
         LVM_LV=$(echo $PERSIST_DEVICE | cut -d: -f3)
         while [ $TRIES -gt 0 ] && sleep 0.1 && ! lvm.static vgchange -a y $LVM_VG &>/dev/null; do
             TRIES=$(($TRIES-1))
-	done
+        done
         lvm.static vgscan --mknodes &>/dev/null
         PERSIST_PART="/dev/$LVM_VG/$LVM_LV"
     else
@@ -856,7 +876,7 @@ enable_service() {
 
 add_path() {
     if [ -f "$NEW_ROOT/etc/env.d/99ammit" ]; then
-    	sed -i "\%^PATH=%s%$%:$1%" "$NEW_ROOT/etc/env.d/99ammit"
+        sed -i "\%^PATH=%s%$%:$1%" "$NEW_ROOT/etc/env.d/99ammit"
     else
         echo "PATH=$1" > "$NEW_ROOT/etc/env.d/99ammit"
     fi
@@ -877,9 +897,9 @@ etc_setup() {
     fi
     for s in $SERVICES; do
         if [ "${s:0:4}" == "net." ]; then
-	    # create network service
-	    ln -sf net.lo "$NEW_ROOT/etc/init.d/$s"
-	fi
+            # create network service
+            ln -sf net.lo "$NEW_ROOT/etc/init.d/$s"
+        fi
         enable_service $s
     done
 
@@ -911,6 +931,6 @@ EOF
 
     # GMT manual install does not install PATH
     if [ -d "$NEW_ROOT/opt/gmt/bin" ]; then
-	add_path "/opt/gmt/bin"
+        add_path "/opt/gmt/bin"
     fi
 }

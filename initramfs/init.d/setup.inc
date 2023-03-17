@@ -17,7 +17,7 @@ STD_GID=1000
 STD_HOME="/home/$STD_USER"
 STD_SHELL="/bin/zsh"
 STD_PASSWD='$6$0cn6F1BR3y4wT64v$slbEp74yk0V5aoY/.1wpohsCnQVvL6jgbMHmmIotO6s.jKWwK7KcVM.hEKD.Y9dwOv9BNGy59H/YlT2qIOJ5//'
-STD_GROUPS="users wheel video scanner plugdev docker dialout uucp vboxusers lpadmin"
+STD_GROUPS="users wheel video scanner plugdev docker dialout uucp vboxusers lpadmin kvm"
 
 # system setup
 HOSTNAME="phoenix"
