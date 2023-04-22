@@ -20,7 +20,7 @@ watch_target() {
     while inotifywait -qqr -e modify,attrib,create,delete,move_self,delete_self "/etc/$1"; do
         # something changed, update
         delayed_update "$1" &
-	sleep 0.1
+        sleep 0.1
     done
 }
 

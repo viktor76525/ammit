@@ -1,7 +1,7 @@
 # Ammit
 meta meta initramfs linux distribution
 
-Created from a personal need, provides genuine features different from other distributions. No warranty provided, user is responsible for checking fitness for purpose including security. Named Ammit because Phoenix is overused but it is a very good description of what this distribution is. Free for anyone to use.
+Provides genuine features different from other distributions without duplicating existing functionality. No warranty provided, user is responsible for checking fitness for purpose including security. Named Ammit because Phoenix is overused but it is a very good description of what this distribution is. Free for anyone to use.
 
 A linux distribution based on the Gentoo "meta" distribution for those without time to waste. Ammit goes a step further to abstract the system from the data and specific wanted configurations.
 It achieves this by modifying what is basically a Gentoo stage 3 tarball which has had extra packages and emerge configurations installed. Everything else (software configuration) is handled by the initramfs. This allows some cool things that save lots of time for the admin.
@@ -17,11 +17,11 @@ It achieves this by modifying what is basically a Gentoo stage 3 tarball which h
 
 ## Initial Setup
 ```
-mkdir distfiles
-mkdir gentoo
+./setup.sh
 cp <stage-3-tarball> gentoo/
 cd gentoo
 tar xvvf <stage-3-tarball>
+rm <stage-3-tarball>
 cd ..
 ```
 
@@ -35,12 +35,13 @@ exit
 ```
 
 ## Deploying
-You need only 2 partitions.
+An ISO is built for optical media / virtual machines as part of `build.sh`.
+You need only 2 partitions to boot from a block device.
 1. EFI boot partition (gpt partition table on disk, fat32 file system, boot/esp flag on).
 2. Partition for gentoo.sfs image. Any partition format which has built in support in the kernel.
 ```
-# make sure you have run the umount script
-./mksquash.sh
-cp gentoo.sfs /mnt/boot-partition/images/gentoo.sfs
-cp gentoo/usr/src/linux/arch/x86_64/boot/bzImage /mnt/efi-partition/EFI/Boot/bootx64.efi
+# make sure you have run the umount.sh script
+./build.sh
+cp build/gentoo.sfs /mnt/boot-partition/images/gentoo.sfs
+cp build/EFI/Boot/bootx64.efi /mnt/efi-partition/EFI/Boot/bootx64.efi
 ```
