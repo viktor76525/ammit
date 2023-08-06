@@ -793,7 +793,7 @@ set_persistent() {
         PERSIST_PART="/dev/$LVM_VG/$LVM_LV"
     else
         # wait for device to show up
-        while [ $TRIES -gt 0 ] && sleep 0.1 && ! PERSIST_PART=$(findfs $PERSIST_DEVICE); do
+        while [ $TRIES -gt 0 ] && sleep 0.1 && ! PERSIST_PART=$(findfs "$PERSIST_DEVICE"); do
             TRIES=$(($TRIES-1))
         done
     fi
