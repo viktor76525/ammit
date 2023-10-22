@@ -8,7 +8,6 @@ gentoo/*
 initramfs/init.d/machines/*/
 initramfs/init.d/users/*/
 initramfs/lib/modules/*.ko
-musl/*
 notes.d/*
-pinebookpro/*
+overlays/*
 releases/*

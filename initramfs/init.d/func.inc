@@ -299,13 +299,18 @@ set_fstab() {
 finish_mounts() {
     # mount system
     if [ "$COPY2RAM" == "NO" ]; then
-        mount -t squashfs /mnt/boot$BOOT_IMG /mnt/sfs
-        mpoints="boot sfs rw"
+        for sfs in /mnt/boot/images/*.sfs; do
+            bname=$(basename $sfs)
+            mkdir "/mnt/sfs/$bname"
+            mount -t squashfs "$sfs" "/mnt/sfs/$bname"
+        done
+        mpoints="boot rw"
     else
         umount /mnt/boot
         proc_good "Boot Device Safe to Remove"
-        mount -t squashfs /mnt/ram/gentoo.sfs /mnt/sfs
-        mpoints="sfs rw ram"
+        mkdir /mnt/sfs/$BOOT_IMG
+        mount -t squashfs /mnt/ram/$BOOT_IMG /mnt/sfs/$BOOT_IMG
+        mpoints="rw ram"
     fi
 
     # rw layer tmpfs can compete and evenually moved to zram or start with zram
@@ -315,14 +320,18 @@ finish_mounts() {
     mke2fs -L rootRW -m 1 /dev/zram1 >/dev/null
     mount -o discard /dev/zram1 /mnt/rw
     # construct overlayfs
-    mkdir -p /mnt/rw/ofs_delta
-    mkdir -p /mnt/rw/ofs_work
-    mount -t overlay -o lowerdir=/mnt/sfs,upperdir=/mnt/rw/ofs_delta,workdir=/mnt/rw/ofs_work rootOFS $NEW_ROOT
+    mkdir -p /mnt/rw/delta
+    mkdir -p /mnt/rw/work
+    mount -t overlay -o lowerdir=$(echo /mnt/sfs/* | tr ' ' ':'),upperdir=/mnt/rw/delta,workdir=/mnt/rw/work rootOFS $NEW_ROOT
 
     # rearrange
     for mpoint in $mpoints; do
         mkdir -p "$NEW_ROOT/mnt/$mpoint"
         mount --move /mnt/$mpoint ${NEW_ROOT}/mnt/$mpoint
+    done
+    for mpoint in /mnt/sfs/*; do
+        mkdir -p "$NEW_ROOT$mpoint"
+        mount --move "$mpoint" "$NEW_ROOT$mpoint"
     done
     # efi boot partition
     if [ ! -z "$EFI_PARTUUID" ]; then
@@ -598,7 +607,7 @@ open_device() {
         BOOT_PARTITION=/dev/mapper/system
     fi
     mount -o $BOOT_OPTIONS $BOOT_PARTITION /mnt/boot
-    if [ -e /mnt/boot$BOOT_IMG ]; then
+    if [ -e /mnt/boot/images/$BOOT_IMG ]; then
         proc_good "$plabel"
     else
         proc_bad "$plabel"
@@ -842,8 +851,8 @@ start_copy_system() {
     plabel="Starting Copy to RAM"
     proc_start "$plabel"
     mount -t ramfs rootRO /mnt/ram
-    cp /mnt/boot$BOOT_IMG /mnt/ram/ > /dev/null &
-    while [ ! -e /mnt/ram/gentoo.sfs ]; do
+    cp /mnt/boot/images/$BOOT_IMG /mnt/ram/ > /dev/null &
+    while [ ! -e /mnt/ram/$BOOT_IMG ]; do
         sleep 0.1
     done
     proc_good "$plabel"
@@ -855,8 +864,8 @@ wait_copy_system() {
     fi
 
     plabel="Waiting for Copy to RAM"
-    while [ $(stat -c %s /mnt/ram/gentoo.sfs) -lt $(stat -c %s /mnt/boot$BOOT_IMG) ]; do
-        diff=$(( $(stat -c %s /mnt/ram/gentoo.sfs) * 100 / $(stat -c %s /mnt/boot$BOOT_IMG) ))
+    while [ $(stat -c %s /mnt/ram/$BOOT_IMG) -lt $(stat -c %s /mnt/boot/images/$BOOT_IMG) ]; do
+        diff=$(( $(stat -c %s /mnt/ram/$BOOT_IMG) * 100 / $(stat -c %s /mnt/boot/images/$BOOT_IMG) ))
         proc_update "$plabel ${diff}%"
         sleep 0.25
     done

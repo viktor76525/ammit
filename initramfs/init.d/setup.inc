@@ -4,7 +4,7 @@ SYSTEM_NAME="AMMIT"
 BOOT_DEVICE="LABEL=Hesat"
 # mount options for boot device
 BOOT_OPTIONS="ro"
-BOOT_IMG="/images/gentoo.sfs"
+BOOT_IMG="gentoo.sfs"
 
 # superuser password
 SU_PASSWD=''
