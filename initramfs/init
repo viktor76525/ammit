@@ -44,7 +44,6 @@ finish_mounts
 ##################
 
 set_persistent
-adduser2
 # user exists below this point
 set_fstab
 set_keymap

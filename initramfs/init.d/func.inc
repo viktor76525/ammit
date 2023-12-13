@@ -784,6 +784,7 @@ ask_persistent() {
 
 
 set_persistent() {
+    adduser2
     if [ "$PERSIST" == "NO" ]; then
         return
     fi
@@ -823,9 +824,13 @@ set_persistent() {
         PERSIST_PART=/dev/mapper/home
     fi
     mkdir /mnt/ptmp
-    mount -o ro $PERSIST_PART /mnt/ptmp
+    mount -o ro,$PERSIST_OPTIONS $PERSIST_PART /mnt/ptmp
     if [ -d "/mnt/ptmp/.etc" ]; then
         cp -a "/mnt/ptmp/.etc/." "$NEW_ROOT/etc"
+    fi
+    if [ ! -d "/mnt/ptmp/$STD_USER" ]; then
+        mount -o remount,rw /mnt/ptmp
+        cp -a "$NEW_ROOT$STD_HOME" "/mnt/ptmp/$STD_USER"
     fi
     umount /mnt/ptmp
     rm -rf /mnt/ptmp
